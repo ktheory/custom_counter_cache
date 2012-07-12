@@ -10,15 +10,24 @@ module CustomCounterCache::Model
       # counter accessors
       unless column_names.include?(cache_column) # Object.const_defined?(:Counter)
         has_many :counters, :as => :countable, :dependent => :destroy
-        define_method "#{cache_column}" do
+        str = <<-EODEF
+        def #{cache_column}(options={})
+          # Options:
+          #   :reload # Don't use cached counter values. Reload from SQL
+
           # Check if the counter is already loaded (e.g. eager-loaded)
-          if counters.loaded? && counter = counters.detect{|c| c.key == cache_column.to_s }
+          if !options[:reload] && counters.loaded? && counter = counters.detect{|c| c.key == #{cache_column.to_s} }
             counter.value
           else
-            counters.find(:first, :conditions => { :key => cache_column.to_s }).value rescue 0
+            counters.find(:first, :conditions => { :key => #{cache_column.to_s} }).value rescue 0
           end
         end
-        define_method "#{cache_column}=" do |count|
+        EODEF
+
+        puts str
+        eval str
+
+        define_method("#{cache_column}=") do |count|
           if ( counter = counters.find(:first, :conditions => { :key => cache_column.to_s }) )
             counter.update_attribute :value, count.to_i
           else
